@@ -5,10 +5,8 @@ import { TestProvider } from 'test/helpers/TestProvider';
 import { render, screen, waitFor, within } from 'test/test-utils';
 import { byRole, byTestId, byText } from 'testing-library-selector';
 
-import { PluginExtensionTypes } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { locationService, setAppEvents, usePluginLinks } from '@grafana/runtime';
-import appEvents from 'app/core/app_events';
+import { locationService } from '@grafana/runtime';
 import { mockUserApi, setupMswServer } from 'app/features/alerting/unified/mockApi';
 import { setAlertmanagerChoices } from 'app/features/alerting/unified/mocks/server/configure';
 import * as actions from 'app/features/alerting/unified/state/actions';
@@ -39,12 +37,6 @@ import {
 import { setupPluginsExtensionsHook } from './testSetup/plugins';
 import { DataSourceType, GRAFANA_RULES_SOURCE_NAME } from './utils/datasource';
 
-jest.mock('@grafana/runtime', () => ({
-  ...jest.requireActual('@grafana/runtime'),
-  getPluginLinkExtensions: jest.fn(),
-  usePluginLinks: jest.fn(),
-  useReturnToPrevious: jest.fn(),
-}));
 jest.mock('./api/buildInfo');
 jest.mock('./api/prometheus');
 jest.mock('./api/ruler');
@@ -52,11 +44,9 @@ jest.mock('./api/ruler');
 jest.spyOn(actions, 'rulesInSameGroupHaveInvalidFor').mockReturnValue([]);
 jest.spyOn(apiRuler, 'rulerUrlBuilder');
 
-setAppEvents(appEvents);
 setupPluginsExtensionsHook();
 
 const mocks = {
-  usePluginLinksMock: jest.mocked(usePluginLinks),
   rulesInSameGroupHaveInvalidForMock: jest.mocked(actions.rulesInSameGroupHaveInvalidFor),
 
   api: {
@@ -151,20 +141,7 @@ describe('RuleList', () => {
       AccessControlAction.AlertingRuleExternalWrite,
     ]);
     mocks.rulesInSameGroupHaveInvalidForMock.mockReturnValue([]);
-    mocks.usePluginLinksMock.mockReturnValue({
-      links: [
-        {
-          pluginId: 'grafana-ml-app',
-          id: '1',
-          type: PluginExtensionTypes.link,
-          title: 'Run investigation',
-          category: 'Sift',
-          description: 'Run a Sift investigation for this alert',
-          onClick: jest.fn(),
-        },
-      ],
-      isLoading: false,
-    });
+
     setupDataSources(...Object.values(dataSources));
   });
 
