@@ -1,4 +1,4 @@
-import { isEqual } from 'lodash';
+import { get, isEqual } from 'lodash';
 
 import { locationUtil, UrlQueryMap } from '@grafana/data';
 import { config, getBackendSrv, isFetchError, locationService } from '@grafana/runtime';
@@ -6,9 +6,7 @@ import { DashboardV2Spec } from '@grafana/schema/dist/esm/schema/dashboard/v2alp
 import { StateManagerBase } from 'app/core/services/StateManagerBase';
 import { getMessageFromError } from 'app/core/utils/errors';
 import { startMeasure, stopMeasure } from 'app/core/utils/metrics';
-import { AnnoKeyFolder } from 'app/features/apiserver/types';
-import { DashboardWithAccessInfo } from 'app/features/dashboard/api/types';
-import { dashboardLoaderSrv, DashboardLoaderSrvV2 } from 'app/features/dashboard/services/DashboardLoaderSrv';
+import { dashboardLoaderSrv } from 'app/features/dashboard/services/DashboardLoaderSrv';
 import { getDashboardSrv } from 'app/features/dashboard/services/DashboardSrv';
 import { emitDashboardViewEvent } from 'app/features/dashboard/state/analyticsProcessor';
 import { trackDashboardSceneLoaded } from 'app/features/dashboard/utils/tracking';
@@ -65,14 +63,11 @@ interface DashboardScenePageStateManagerLike<T> {
   transformResponseToScene(rsp: T | null, options: LoadDashboardOptions): DashboardScene | null;
   reloadDashboard(params: LoadDashboardOptions['params']): Promise<void>;
   loadSnapshot(slug: string): Promise<void>;
-  setDashboardCache(cacheKey: string, dashboard: T): void;
   clearSceneCache(): void;
   clearDashboardCache(): void;
   clearState(): void;
-  getCache(): Record<string, DashboardScene>;
   useState: () => DashboardScenePageState;
 }
-
 abstract class DashboardScenePageStateManagerBase<T>
   extends StateManagerBase<DashboardScenePageState>
   implements DashboardScenePageStateManagerLike<T>
@@ -85,10 +80,6 @@ abstract class DashboardScenePageStateManagerBase<T>
 
   // This is a simplistic, short-term cache for DashboardDTOs to avoid fetching the same dashboard multiple times across a short time span.
   protected dashboardCache?: DashboardCacheEntry<T>;
-
-  getCache(): Record<string, DashboardScene> {
-    return this.cache;
-  }
 
   public async loadSnapshot(slug: string) {
     try {
@@ -247,7 +238,6 @@ export class DashboardScenePageStateManager extends DashboardScenePageStateManag
         case DashboardRoutes.Home:
           rsp = await getBackendSrv().get('/api/dashboards/home');
 
-          debugger;
           if (rsp.redirectUri) {
             return rsp;
           }
@@ -363,115 +353,99 @@ export class DashboardScenePageStateManager extends DashboardScenePageStateManag
   }
 }
 
-export class DashboardScenePageStateManagerV2 extends DashboardScenePageStateManagerBase<
-  DashboardWithAccessInfo<DashboardV2Spec>
-> {
-  private dashboardLoader = new DashboardLoaderSrvV2();
-
-  transformResponseToScene(
-    rsp: DashboardWithAccessInfo<DashboardV2Spec> | null,
-    options: LoadDashboardOptions
-  ): DashboardScene | null {
+export class DashboardScenePageStateManagerV2 extends DashboardScenePageStateManagerBase<DashboardV2Spec> {
+  transformResponseToScene(rsp: DashboardV2Spec | null, options: LoadDashboardOptions): DashboardScene | null {
     throw new Error('Method not implemented.');
   }
-
   reloadDashboard(params: LoadDashboardOptions['params']): Promise<void> {
     throw new Error('Method not implemented.');
   }
-
   public async fetchDashboard({
     uid,
     route,
     urlFolderUid,
     params,
-  }: LoadDashboardOptions): Promise<DashboardWithAccessInfo<DashboardV2Spec> | null> {
-    debugger;
-    // throw new Error('Method not implemented.');
-    const cacheKey = route === DashboardRoutes.Home ? HOME_DASHBOARD_CACHE_KEY : uid;
-    if (!params) {
-      const cachedDashboard = this.getDashboardFromCache(cacheKey);
-      if (cachedDashboard) {
-        return cachedDashboard;
-      }
-    }
-    let rsp: DashboardWithAccessInfo<DashboardV2Spec>;
-    try {
-      switch (route) {
-        case DashboardRoutes.New:
-          throw new Error('Method not implemented.');
-          // rsp = await buildNewDashboardSaveModel(urlFolderUid);
-          break;
-        case DashboardRoutes.Home:
-          throw new Error('Method not implemented.');
-          // rsp = await getBackendSrv().get('/api/dashboards/home');
-
-          // if (rsp.redirectUri) {
-          //   return rsp;
-          // }
-          // if (rsp?.meta) {
-          //   rsp.meta.canSave = false;
-          //   rsp.meta.canShare = false;
-          //   rsp.meta.canStar = false;
-          // }
-          break;
-        case DashboardRoutes.Public: {
-          return await this.dashboardLoader.loadDashboard('public', '', uid);
-        }
-        default:
-          const queryParams = params
-            ? {
-                version: params.version,
-                scopes: params.scopes,
-                from: params.timeRange.from,
-                to: params.timeRange.to,
-                ...params.variables,
-              }
-            : undefined;
-          rsp = await this.dashboardLoader.loadDashboard('db', '', uid, queryParams);
-          if (route === DashboardRoutes.Embedded) {
-            throw new Error('Method not implemented.');
-            // rsp.meta.isEmbedded = true;
-          }
-      }
-      if (rsp.access.url && route === DashboardRoutes.Normal) {
-        const dashboardUrl = locationUtil.stripBaseFromUrl(rsp.access.url);
-        const currentPath = locationService.getLocation().pathname;
-        if (dashboardUrl !== currentPath) {
-          // Spread current location to persist search params used for navigation
-          locationService.replace({
-            ...locationService.getLocation(),
-            pathname: dashboardUrl,
-          });
-          console.log('not correct url correcting', dashboardUrl, currentPath);
-        }
-      }
-      // Populate nav model in global store according to the folder
-      if (rsp.metadata.annotations?.[AnnoKeyFolder]) {
-        await updateNavModel(rsp.metadata.annotations?.[AnnoKeyFolder]);
-      }
-      // Do not cache new dashboards
-      this.setDashboardCache(cacheKey, rsp);
-    } catch (e) {
-      // Ignore cancelled errors
-      if (isFetchError(e) && e.cancelled) {
-        return null;
-      }
-      throw e;
-    }
-    return rsp;
+  }: LoadDashboardOptions): Promise<DashboardV2Spec | null> {
+    throw new Error('Method not implemented.');
+    // const cacheKey = route === DashboardRoutes.Home ? HOME_DASHBOARD_CACHE_KEY : uid;
+    // if (!params) {
+    //   const cachedDashboard = this.getDashboardFromCache(cacheKey);
+    //   if (cachedDashboard) {
+    //     return cachedDashboard;
+    //   }
+    // }
+    // let rsp: DashboardDTO;
+    // try {
+    //   switch (route) {
+    //     case DashboardRoutes.New:
+    //       rsp = await buildNewDashboardSaveModel(urlFolderUid);
+    //       break;
+    //     case DashboardRoutes.Home:
+    //       rsp = await getBackendSrv().get('/api/dashboards/home');
+    //       if (rsp.redirectUri) {
+    //         return rsp;
+    //       }
+    //       if (rsp?.meta) {
+    //         rsp.meta.canSave = false;
+    //         rsp.meta.canShare = false;
+    //         rsp.meta.canStar = false;
+    //       }
+    //       break;
+    //     case DashboardRoutes.Public: {
+    //       return await dashboardLoaderSrv.loadDashboard('public', '', uid);
+    //     }
+    //     default:
+    //       const queryParams = params
+    //         ? {
+    //             version: params.version,
+    //             scopes: params.scopes,
+    //             from: params.timeRange.from,
+    //             to: params.timeRange.to,
+    //             ...params.variables,
+    //           }
+    //         : undefined;
+    //       rsp = await dashboardLoaderSrv.loadDashboard('db', '', uid, queryParams);
+    //       if (route === DashboardRoutes.Embedded) {
+    //         rsp.meta.isEmbedded = true;
+    //       }
+    //   }
+    //   if (rsp.meta.url && route === DashboardRoutes.Normal) {
+    //     const dashboardUrl = locationUtil.stripBaseFromUrl(rsp.meta.url);
+    //     const currentPath = locationService.getLocation().pathname;
+    //     if (dashboardUrl !== currentPath) {
+    //       // Spread current location to persist search params used for navigation
+    //       locationService.replace({
+    //         ...locationService.getLocation(),
+    //         pathname: dashboardUrl,
+    //       });
+    //       console.log('not correct url correcting', dashboardUrl, currentPath);
+    //     }
+    //   }
+    //   // Populate nav model in global store according to the folder
+    //   if (rsp.meta.folderUid) {
+    //     await updateNavModel(rsp.meta.folderUid);
+    //   }
+    //   // Do not cache new dashboards
+    //   this.setDashboardCache(cacheKey, rsp);
+    // } catch (e) {
+    //   // Ignore cancelled errors
+    //   if (isFetchError(e) && e.cancelled) {
+    //     return null;
+    //   }
+    //   throw e;
+    // }
+    // return rsp;
   }
 }
 
 let stateManager: DashboardScenePageStateManager | null = null;
 
-export function getDashboardScenePageStateManager(
-  v: 'v2'
-): DashboardScenePageStateManagerLike<DashboardWithAccessInfo<DashboardV2Spec>>;
+export function getDashboardScenePageStateManager(v: 'v2'): DashboardScenePageStateManagerLike<DashboardV2Spec>;
 export function getDashboardScenePageStateManager(): DashboardScenePageStateManagerLike<DashboardDTO>;
 
 export function getDashboardScenePageStateManager(
   v?: 'v2'
-): DashboardScenePageStateManagerLike<DashboardDTO | DashboardWithAccessInfo<DashboardV2Spec>> {
+): DashboardScenePageStateManagerLike<DashboardDTO | DashboardV2Spec> {
   if (!stateManager) {
     stateManager = new DashboardScenePageStateManager({});
   }
