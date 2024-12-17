@@ -6,6 +6,7 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/grafana/grafana/pkg/apimachinery/utils"
 	dashboardalpha1 "github.com/grafana/grafana/pkg/apis/dashboard/v0alpha1"
 	authzextv1 "github.com/grafana/grafana/pkg/services/authz/proto/v1"
 )
@@ -81,6 +82,26 @@ var RelationsFolder = append(
 	RelationCreate,
 	RelationDelete,
 )
+
+// VerbMapping is mapping a k8s verb to a zanzana relation.
+var VerbMapping = map[string]string{
+	utils.VerbGet:              RelationGet,
+	utils.VerbList:             RelationGet,
+	utils.VerbWatch:            RelationGet,
+	utils.VerbCreate:           RelationCreate,
+	utils.VerbUpdate:           RelationUpdate,
+	utils.VerbPatch:            RelationUpdate,
+	utils.VerbDelete:           RelationDelete,
+	utils.VerbDeleteCollection: RelationDelete,
+}
+
+// RelationToVerbMapping is mapping a zanzana relation to k8s verb.
+var RelationToVerbMapping = map[string]string{
+	RelationGet:    utils.VerbGet,
+	RelationCreate: utils.VerbCreate,
+	RelationUpdate: utils.VerbUpdate,
+	RelationDelete: utils.VerbDelete,
+}
 
 func IsGroupResourceRelation(relation string) bool {
 	return isValidRelation(relation, RelationsGroupResource)
