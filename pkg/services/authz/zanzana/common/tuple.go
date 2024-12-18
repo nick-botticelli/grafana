@@ -128,16 +128,16 @@ func NewTypedIdent(typ string, name string) string {
 	return fmt.Sprintf("%s:%s", typ, name)
 }
 
-func NewResourceIdent(group, resource, name string) string {
-	return fmt.Sprintf("%s:%s/%s", TypeResource, FormatGroupResource(group, resource, ""), name)
+func NewResourceIdent(group, resource, subresource, name string) string {
+	return fmt.Sprintf("%s:%s/%s", TypeResource, FormatGroupResource(group, resource, subresource), name)
 }
 
 func NewFolderIdent(name string) string {
 	return fmt.Sprintf("%s:%s", TypeFolder, name)
 }
 
-func NewGroupResourceIdent(group, resource string) string {
-	return fmt.Sprintf("%s:%s", TypeGroupResouce, FormatGroupResource(group, resource, ""))
+func NewGroupResourceIdent(group, resource, subresource string) string {
+	return fmt.Sprintf("%s:%s", TypeGroupResouce, FormatGroupResource(group, resource, subresource))
 }
 
 func FormatGroupResource(group, resource, subresource string) string {
@@ -148,16 +148,16 @@ func FormatGroupResource(group, resource, subresource string) string {
 	return fmt.Sprintf("%s/%s", group, resource)
 }
 
-func NewResourceTuple(subject, relation, group, resource, name string) *openfgav1.TupleKey {
+func NewResourceTuple(subject, relation, group, resource, subresource, name string) *openfgav1.TupleKey {
 	return &openfgav1.TupleKey{
 		User:     subject,
 		Relation: relation,
-		Object:   NewResourceIdent(group, resource, name),
+		Object:   NewResourceIdent(group, resource, subresource, name),
 		Condition: &openfgav1.RelationshipCondition{
 			Name: "group_filter",
 			Context: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
-					"group_resource": structpb.NewStringValue(FormatGroupResource(group, resource, "")),
+					"group_resource": structpb.NewStringValue(FormatGroupResource(group, resource, subresource)),
 				},
 			},
 		},
@@ -170,7 +170,7 @@ func isFolderResourceRelationSet(relation string) bool {
 		relation == RelationFolderResourceSetAdmin
 }
 
-func NewFolderResourceTuple(subject, relation, group, resource, folder string) *openfgav1.TupleKey {
+func NewFolderResourceTuple(subject, relation, group, resource, subresource, folder string) *openfgav1.TupleKey {
 	relation = FolderResourceRelation(relation)
 	var condition *openfgav1.RelationshipCondition
 	if !isFolderResourceRelationSet(relation) {
@@ -179,7 +179,7 @@ func NewFolderResourceTuple(subject, relation, group, resource, folder string) *
 			Context: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
 					"group_resources": structpb.NewListValue(&structpb.ListValue{
-						Values: []*structpb.Value{structpb.NewStringValue(FormatGroupResource(group, resource, ""))},
+						Values: []*structpb.Value{structpb.NewStringValue(FormatGroupResource(group, resource, subresource))},
 					}),
 				},
 			},
@@ -194,11 +194,11 @@ func NewFolderResourceTuple(subject, relation, group, resource, folder string) *
 	}
 }
 
-func NewGroupResourceTuple(subject, relation, group, resource string) *openfgav1.TupleKey {
+func NewGroupResourceTuple(subject, relation, group, resource, subresource string) *openfgav1.TupleKey {
 	return &openfgav1.TupleKey{
 		User:     subject,
 		Relation: relation,
-		Object:   NewGroupResourceIdent(group, resource),
+		Object:   NewGroupResourceIdent(group, resource, subresource),
 	}
 }
 
@@ -317,6 +317,7 @@ func AddRenderContext(req *openfgav1.CheckRequest) {
 		Object: NewGroupResourceIdent(
 			dashboardalpha1.DashboardResourceInfo.GroupResource().Group,
 			dashboardalpha1.DashboardResourceInfo.GroupResource().Resource,
+			"",
 		),
 	})
 }
