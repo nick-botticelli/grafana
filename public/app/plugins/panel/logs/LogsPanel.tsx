@@ -27,9 +27,10 @@ import {
   TimeZone,
   toUtc,
   urlUtil,
+  LogSortOrderChangeEvent,
 } from '@grafana/data';
 import { convertRawToRange } from '@grafana/data/src/datetime/rangeutil';
-import { config } from '@grafana/runtime';
+import { config, getAppEvents } from '@grafana/runtime';
 import { ScrollContainer, usePanelContext, useStyles2 } from '@grafana/ui';
 import { getFieldLinksForExplore } from 'app/features/explore/utils/links';
 import { InfiniteScroll } from 'app/features/logs/components/InfiniteScroll';
@@ -142,12 +143,20 @@ export const LogsPanel = ({
   const loadingRef = useRef(false);
   const [panelData, setPanelData] = useState(data);
   let closeCallback = useRef<() => void>();
+  const { eventBus, onAddAdHocFilter } = usePanelContext();
 
   useEffect(() => {
     scrollElement?.scrollTo(0, scrollTop);
   }, [scrollElement, scrollTop]);
 
-  const { eventBus, onAddAdHocFilter } = usePanelContext();
+  useEffect(() => {
+    getAppEvents().publish(
+      new LogSortOrderChangeEvent({
+        order: sortOrder,
+      })
+    );
+  }, [sortOrder]);
+
   const onLogRowHover = useCallback(
     (row?: LogRowModel) => {
       if (row) {
