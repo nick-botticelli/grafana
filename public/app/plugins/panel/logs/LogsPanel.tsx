@@ -131,7 +131,6 @@ export const LogsPanel = ({
 }: LogsPanelProps) => {
   const isAscending = sortOrder === LogsSortOrder.Ascending;
   const style = useStyles2(getStyles);
-  const [scrollTop, setScrollTop] = useState(0);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const [contextRow, setContextRow] = useState<LogRowModel | null>(null);
   const dataSourcesMap = useDatasourcesFromTargets(data.request?.targets);
@@ -144,10 +143,6 @@ export const LogsPanel = ({
   const [panelData, setPanelData] = useState(data);
   let closeCallback = useRef<() => void>();
   const { eventBus, onAddAdHocFilter } = usePanelContext();
-
-  useEffect(() => {
-    scrollElement?.scrollTo(0, scrollTop);
-  }, [scrollElement, scrollTop]);
 
   useEffect(() => {
     getAppEvents().publish(
@@ -287,12 +282,16 @@ export const LogsPanel = ({
   }, [data]);
 
   useLayoutEffect(() => {
-    if (isAscending && logsContainerRef.current) {
-      setScrollTop(logsContainerRef.current.offsetHeight);
-    } else {
-      setScrollTop(0);
+    // If the user has enabled infinite scrolling, we don't want to interfere with the scroll position.
+    if (!logsContainerRef.current || !scrollElement || enableInfiniteScrolling) {
+      return;
     }
-  }, [isAscending, logRows]);
+    if (sortOrder === LogsSortOrder.Ascending) {
+      scrollElement.scrollTo(0, logsContainerRef.current.offsetHeight);
+    } else {
+      scrollElement.scrollTo(0, 0);
+    }
+  }, [enableInfiniteScrolling, scrollElement, sortOrder, logRows]);
 
   const getFieldLinks = useCallback(
     (field: Field, rowIndex: number) => {
