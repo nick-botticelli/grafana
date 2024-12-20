@@ -210,6 +210,10 @@ func TestIntegrationKeeper(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, rawAWS)
 
+		t.Cleanup(func() {
+			require.NoError(t, client.Resource.Delete(ctx, rawAWS.GetName(), metav1.DeleteOptions{}))
+		})
+
 		testDataKeeperGCP := testDataKeeperAWS.DeepCopy()
 		testDataKeeperGCP.Object["spec"].(map[string]any)["aws"] = nil
 		testDataKeeperGCP.Object["spec"].(map[string]any)["gcp"] = map[string]any{
